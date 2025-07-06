@@ -1,0 +1,264 @@
+version: '3.8'
+
+services:
+  # Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: eventticket-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - eventticket-network
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: eventticket-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - eventticket-network
+
+  # Kafka for event streaming (optional)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: eventticket-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - eventticket-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: eventticket-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - eventticket-network
+
+  # Microservices
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: eventticket-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  event-service:
+    build:
+      context: ./event-service
+      dockerfile: Dockerfile
+    container_name: eventticket-event-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    container_name: eventticket-order-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: eventticket-payment-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  ticket-service:
+    build:
+      context: ./ticket-service
+      dockerfile: Dockerfile
+    container_name: eventticket-ticket-service
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: eventticket-notification-service
+    ports:
+      - "8086:8086"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - sqlserver
+      - kafka
+    networks:
+      - eventticket-network
+
+  review-service:
+    build:
+      context: ./review-service
+      dockerfile: Dockerfile
+    container_name: eventticket-review-service
+    ports:
+      - "8087:8087"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  admin-service:
+    build:
+      context: ./admin-service
+      dockerfile: Dockerfile
+    container_name: eventticket-admin-service
+    ports:
+      - "8088:8088"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=eventticket
+      - DB_USERNAME=sa
+      - DB_PASSWORD=YourStrong@Passw0rd
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - eventticket-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: eventticket-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - user-service
+      - event-service
+      - order-service
+      - payment-service
+      - ticket-service
+      - notification-service
+      - review-service
+      - admin-service
+      - redis
+    networks:
+      - eventticket-network
+
+volumes:
+  sqlserver_data:
+  redis_data:
+
+networks:
+  eventticket-network:
+    driver: bridge 
